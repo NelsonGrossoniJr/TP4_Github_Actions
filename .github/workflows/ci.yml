@@ -3,69 +3,44 @@ name: CI/CD Pipeline
 
 # Define os eventos que disparam a execução do workflow
 on:
-  # Executa quando há push (envio) de código para o repositório
   push:
-    # Apenas para as branches main e master (ignora outras branches)
     branches: [ main, master]
-  # Executa quando um Pull Request é criado ou atualizado
+
   pull_request:
-    # Apenas para Pull Requests direcionados às branches main e master
-    branches: [ main, master]
-  # Permite execução manual do workflow através da interface do GitHub
+    branches: [ main, master] 
   workflow_dispatch:
 
 # Define os jobs (tarefas) que serão executados
 jobs:
-  # Nome do job (identificador interno)
   build-and-test:
-    # Nome amigável que aparece nos logs do GitHub Actions
     name: Build e Testes
-    # Define o sistema operacional do runner (máquina virtual que executa o workflow)
-    # ubuntu-latest = última versão estável do Ubuntu Linux
     runs-on: ubuntu-latest
     
-    # Lista de passos (steps) que serão executados sequencialmente
     steps:
       # Passo 1: Baixar o código do repositório
       - name: Checkout do código
-        # Usa a action oficial do GitHub para fazer checkout do código
-        # v4 = versão 4 (mais recente e estável)
         uses: actions/checkout@v4
         
       # Passo 2: Configurar o ambiente Java e Maven
       - name: Configurar Java 21 e Maven
-        # Usa a action oficial do GitHub para configurar Java
         uses: actions/setup-java@v4
         with:
-          # Versão do Java a ser instalada (21 = Java 21)
           java-version: '21'
-          # Distribuição do Java (temurin = OpenJDK da Eclipse Foundation)
           distribution: 'temurin'
-          # Habilita cache do Maven para acelerar builds futuros
-          # Armazena dependências baixadas para reutilização
           cache: 'maven'
           
       # Passo 3: Configurar Chrome para testes Selenium
       - name: Configurar Chrome para testes Selenium
-        # O GitHub Actions runner já tem Chrome instalado
-        # O WebDriverManager (usado no BaseTest) baixa automaticamente o ChromeDriver compatível
-        # Este passo apenas garante que o Chrome está disponível e configura variáveis de ambiente
         run: |
           google-chrome --version || echo "Chrome não encontrado, mas WebDriverManager vai gerenciar"
           export DISPLAY=:99
           
       # Passo 4: Compilar o projeto (sem executar testes ainda)
       - name: Compilar o projeto
-        # Compila o projeto e gera o JAR, mas pula os testes por enquanto
-        # Os testes serão executados depois que a aplicação estiver rodando
         run: mvn clean compile package -DskipTests
           
       # Passo 5: Iniciar a aplicação em background
       - name: Iniciar aplicação em background
-        # Inicia a aplicação Java na porta 8000 em background
-        # Usa mvn exec:java que automaticamente resolve o classpath com todas as dependências
-        # O & no final executa o comando em background
-        # nohup garante que o processo continue mesmo se o terminal fechar
         run: |
           nohup mvn exec:java -Dexec.mainClass="org.example.App" > app.log 2>&1 &
           echo $! > app.pid
@@ -73,9 +48,6 @@ jobs:
           
       # Passo 6: Aguardar aplicação estar pronta
       - name: Aguardar aplicação estar pronta
-        # Aguarda até que a aplicação responda na porta 8000
-        # Tenta fazer uma requisição HTTP até conseguir (máximo 30 tentativas)
-        # Isso garante que os testes Selenium só rodem quando a aplicação estiver pronta
         run: |
           echo "Aguardando aplicação iniciar..."
           for i in {1..30}; do
@@ -91,17 +63,12 @@ jobs:
           
       # Passo 7: Executar testes (incluindo testes Selenium)
       - name: Executar testes
-        # Agora executa todos os testes, incluindo os testes Selenium
-        # Os testes Selenium vão se conectar em http://localhost:8000/items
-        # A variável CI=true faz o BaseTest usar modo headless para Chrome
         env:
           CI: true
         run: mvn test
         
       # Passo 8: Parar a aplicação
       - name: Parar aplicação
-        # Para a aplicação que foi iniciada em background
-        # Sempre executa, mesmo se os testes falharem (if: always)
         if: always()
         run: |
           if [ -f app.pid ]; then
@@ -116,16 +83,10 @@ jobs:
         
       # Passo 9: Fazer upload dos arquivos gerados (artefatos)
       - name: Upload artefatos de build
-        # Só executa este passo se todos os anteriores foram bem-sucedidos
-        # Se algum teste falhar, este passo não será executado
         if: success()
-        # Usa a action oficial do GitHub para fazer upload de arquivos
         uses: actions/upload-artifact@v4
         with:
-          # Nome do artefato que aparecerá na interface do GitHub
           name: jar-artifact
-          # Caminho dos arquivos a serem enviados (todos os JARs na pasta target)
           path: target/*.jar
-          # Número de dias que o artefato será mantido no GitHub (7 dias)
           retention-days: 7
 
