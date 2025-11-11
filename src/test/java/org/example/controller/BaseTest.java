@@ -15,7 +15,19 @@ public class BaseTest {
 
         ChromeOptions chromeOptions = new ChromeOptions();
         chromeOptions.addArguments("--incognito");
-        chromeOptions.addArguments("--start-maximized");
+        
+        // Verifica se está rodando em ambiente CI (GitHub Actions, etc)
+        String ci = System.getenv("CI");
+        if (ci != null && ci.equals("true")) {
+            // Argumentos necessários para rodar Chrome em ambiente CI sem display
+            chromeOptions.addArguments("--headless");
+            chromeOptions.addArguments("--no-sandbox");
+            chromeOptions.addArguments("--disable-dev-shm-usage");
+            chromeOptions.addArguments("--disable-gpu");
+        } else {
+            // Em ambiente local, maximiza a janela
+            chromeOptions.addArguments("--start-maximized");
+        }
 
         driver = new ChromeDriver(chromeOptions);
         driver.get("http://localhost:8000/items");
