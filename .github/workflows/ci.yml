@@ -1,0 +1,69 @@
+# Nome do workflow que aparecerá na interface do GitHub Actions
+name: CI/CD Pipeline
+
+# Define os eventos que disparam a execução do workflow
+on:
+  # Executa quando há push (envio) de código para o repositório
+  push:
+    # Apenas para as branches main e master (ignora outras branches)
+    branches: [ main, master]
+  # Executa quando um Pull Request é criado ou atualizado
+  pull_request:
+    # Apenas para Pull Requests direcionados às branches main e master
+    branches: [ main, master]
+  # Permite execução manual do workflow através da interface do GitHub
+  workflow_dispatch:
+
+# Define os jobs (tarefas) que serão executados
+jobs:
+  # Nome do job (identificador interno)
+  build-and-test:
+    # Nome amigável que aparece nos logs do GitHub Actions
+    name: Build e Testes
+    # Define o sistema operacional do runner (máquina virtual que executa o workflow)
+    # ubuntu-latest = última versão estável do Ubuntu Linux
+    runs-on: ubuntu-latest
+    
+    # Lista de passos (steps) que serão executados sequencialmente
+    steps:
+      # Passo 1: Baixar o código do repositório
+      - name: Checkout do código
+        # Usa a action oficial do GitHub para fazer checkout do código
+        # v4 = versão 4 (mais recente e estável)
+        uses: actions/checkout@v4
+        
+      # Passo 2: Configurar o ambiente Java e Maven
+      - name: Configurar Java 21 e Maven
+        # Usa a action oficial do GitHub para configurar Java
+        uses: actions/setup-java@v4
+        with:
+          # Versão do Java a ser instalada (21 = Java 21)
+          java-version: '21'
+          # Distribuição do Java (temurin = OpenJDK da Eclipse Foundation)
+          distribution: 'temurin'
+          # Habilita cache do Maven para acelerar builds futuros
+          # Armazena dependências baixadas para reutilização
+          cache: 'maven'
+          
+      # Passo 3: Compilar, testar e empacotar o projeto
+      - name: Build e Testes do projeto
+        # Executa comando Maven no terminal
+        # clean = remove arquivos de builds anteriores
+        # package = compila, executa testes e gera o arquivo JAR
+        run: mvn clean package
+        
+      # Passo 4: Fazer upload dos arquivos gerados (artefatos)
+      - name: Upload artefatos de build
+        # Só executa este passo se todos os anteriores foram bem-sucedidos
+        # Se algum teste falhar, este passo não será executado
+        if: success()
+        # Usa a action oficial do GitHub para fazer upload de arquivos
+        uses: actions/upload-artifact@v4
+        with:
+          # Nome do artefato que aparecerá na interface do GitHub
+          name: jar-artifact
+          # Caminho dos arquivos a serem enviados (todos os JARs na pasta target)
+          path: target/*.jar
+          # Número de dias que o artefato será mantido no GitHub (7 dias)
+          retention-days: 7
+
