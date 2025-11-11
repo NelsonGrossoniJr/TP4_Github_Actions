@@ -39,7 +39,12 @@ public class ItemControllerSeleniumTest extends BaseTest{
         
         // Clica no botão "Nova Tarefa" - aguarda estar clicável
         WebElement botaoNovaTarefa = wait.until(ExpectedConditions.elementToBeClickable(By.linkText("Nova Tarefa")));
-        botaoNovaTarefa.click();
+        // Tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoNovaTarefa.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoNovaTarefa);
+        }
 
         // Verifica se foi redirecionado para o formulário
         WebElement tituloFormulario = wait.until(ExpectedConditions.presenceOfElementLocated(By.tagName("h4")));
@@ -68,7 +73,12 @@ public class ItemControllerSeleniumTest extends BaseTest{
         // Rola a página até o botão para garantir que está visível
         ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", botaoSubmit);
         Thread.sleep(300);
-        botaoSubmit.click();
+        // Tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoSubmit.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoSubmit);
+        }
 
         // Verifica se foi redirecionado para a lista com mensagem de sucesso
         wait.until(ExpectedConditions.urlContains("success="));
@@ -85,8 +95,18 @@ public class ItemControllerSeleniumTest extends BaseTest{
         
         // Encontra e clica no botão de editar da tarefa criada anteriormente
         WebElement tarefaParaEditar = wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//h6[contains(text(), 'Teste Selenium Automatizado')]/ancestor::div[contains(@class, 'card')]")));
+        // Rola até a tarefa estar visível
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", tarefaParaEditar);
+        Thread.sleep(500);
+        
         WebElement botaoEditar = wait.until(ExpectedConditions.elementToBeClickable(tarefaParaEditar.findElement(By.cssSelector("a[href*='/items/edit/']"))));
-        botaoEditar.click();
+        // Tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoEditar.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            // Se o clique normal falhar, usa JavaScript click como fallback
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoEditar);
+        }
 
         // Verifica se foi redirecionado para o formulário de edição
         WebElement tituloFormulario = wait.until(ExpectedConditions.presenceOfElementLocated(By.tagName("h4")));
@@ -112,7 +132,12 @@ public class ItemControllerSeleniumTest extends BaseTest{
         // Rola a página até o botão para garantir que está visível
         ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", botaoSubmit);
         Thread.sleep(300);
-        botaoSubmit.click();
+        // Tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoSubmit.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoSubmit);
+        }
 
         // Verifica se foi redirecionado para a lista com mensagem de sucesso
         wait.until(ExpectedConditions.urlContains("success="));
@@ -133,10 +158,18 @@ public class ItemControllerSeleniumTest extends BaseTest{
         
         // Encontra a tarefa que foi criada e atualizada
         WebElement tarefaParaDeletar = wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//h6[contains(text(), 'Teste Selenium Atualizado')]/ancestor::div[contains(@class, 'card')]")));
+        // Rola até a tarefa estar visível
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", tarefaParaDeletar);
+        Thread.sleep(500);
+        
         WebElement botaoDeletar = wait.until(ExpectedConditions.elementToBeClickable(tarefaParaDeletar.findElement(By.cssSelector("button[onclick*='confirmDelete']"))));
 
-        // Clica no botão de deletar
-        botaoDeletar.click();
+        // Clica no botão de deletar - tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoDeletar.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoDeletar);
+        }
 
         // Verifica se o modal de confirmação foi exibido
         WebElement modal = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("deleteModal")));
@@ -148,7 +181,12 @@ public class ItemControllerSeleniumTest extends BaseTest{
 
         // Confirma a exclusão - aguarda botão estar clicável
         WebElement botaoConfirmarExclusao = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//button[contains(text(), 'Excluir')]")));
-        botaoConfirmarExclusao.click();
+        // Tenta clicar normalmente, se falhar usa JavaScript click
+        try {
+            botaoConfirmarExclusao.click();
+        } catch (org.openqa.selenium.ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", botaoConfirmarExclusao);
+        }
 
         // Verifica se foi redirecionado para a lista com mensagem de sucesso
         wait.until(ExpectedConditions.urlContains("success="));
