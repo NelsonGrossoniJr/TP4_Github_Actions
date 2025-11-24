@@ -255,20 +255,52 @@ jobs:
           echo "🧪 Executando testes Selenium pós-deploy em produção..."
           
           if [ -z "$TEST_BASE_URL" ] || [ "$TEST_BASE_URL" = "" ]; then
-            echo "⚠️ ATENÇÃO: PROD_ENVIRONMENT_URL não está configurado!"
-            echo "   Os testes serão pulados automaticamente."
-            echo "   Configure o secret PROD_ENVIRONMENT_URL no GitHub para habilitar testes em produção."
+            echo "⚠️ PROD_ENVIRONMENT_URL não está configurado!"
             echo ""
-            echo "   Para configurar:"
-            echo "   1. Vá em Settings → Secrets and variables → Actions"
-            echo "   2. Adicione PROD_ENVIRONMENT_URL com a URL completa (ex: https://app.exemplo.com)"
+            echo "   📝 Para demonstração, vamos iniciar a aplicação localmente e testar..."
+            echo "   (Em produção real, a aplicação já estaria rodando no servidor)"
             echo ""
-            # Executa os testes mesmo assim - eles vão pular automaticamente se não tiver URL
-            mvn test -Dtest=PostDeployProductionTest || echo "⚠️ Testes falharam ou foram pulados"
+            
+            # Inicia a aplicação em background para os testes
+            echo "🚀 Iniciando aplicação em localhost:8000 para testes..."
+            nohup mvn exec:java -Dexec.mainClass="org.example.App" > app-prod-test.log 2>&1 &
+            echo $! > app-prod-test.pid
+            sleep 5
+            
+            # Aguarda aplicação estar pronta
+            echo "⏳ Aguardando aplicação iniciar..."
+            for i in {1..30}; do
+              if curl -f http://localhost:8000/items > /dev/null 2>&1; then
+                echo "✅ Aplicação está pronta em localhost:8000!"
+                break
+              fi
+              echo "   Tentativa $i/30..."
+              sleep 2
+            done
+            
+            # Configura TEST_BASE_URL para localhost
+            export TEST_BASE_URL="http://localhost:8000"
+            echo "📍 Usando URL: $TEST_BASE_URL (modo demonstração)"
+            echo ""
+            
+            # Executa os testes
+            mvn test -Dtest=PostDeployProductionTest || echo "⚠️ Alguns testes podem ter falhado"
+            
+            # Para a aplicação
+            if [ -f app-prod-test.pid ]; then
+              kill $(cat app-prod-test.pid) 2>/dev/null || true
+              echo "🛑 Aplicação parada"
+            fi
+            
+            echo ""
+            echo "💡 Para testar em produção real:"
+            echo "   1. Configure PROD_ENVIRONMENT_URL no GitHub Secrets"
+            echo "   2. A aplicação deve estar rodando no servidor de produção"
+            echo "   3. Os testes vão acessar a URL de produção automaticamente"
           else
             echo "📍 URL de produção configurada: $TEST_BASE_URL"
-            echo "   Aguardando aplicação estar pronta (30 segundos)..."
-            sleep 30  # Aguarda aplicação iniciar após deploy
+            echo "   Aguardando aplicação estar pronta no servidor (30 segundos)..."
+            sleep 30  # Aguarda aplicação iniciar após deploy no servidor
             
             # Executa apenas os testes de pós-deploy em produção
             mvn test -Dtest=PostDeployProductionTest
