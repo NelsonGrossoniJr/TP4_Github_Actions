@@ -241,11 +241,28 @@ jobs:
           echo "✅ Deploy para produção concluído com sucesso!"
           echo "📝 Nota: Configure os secrets PROD_DEPLOY_HOST, PROD_DEPLOY_USER, PROD_DEPLOY_KEY no GitHub"
       
-      - name: Smoke Tests pós-deploy
+      - name: Configurar Chrome para testes Selenium
         run: |
-          echo "🔍 Executando smoke tests em produção..."
-          # Adicione verificações de saúde da aplicação aqui
-          # curl -f ${{ secrets.PROD_ENVIRONMENT_URL }}/health || exit 1
+          echo "🔧 Configurando Chrome para testes Selenium..."
+          google-chrome --version || echo "Chrome não encontrado, mas WebDriverManager vai gerenciar"
+          export DISPLAY=:99
+      
+      - name: Testes Selenium pós-deploy em produção
+        env:
+          TEST_BASE_URL: ${{ secrets.PROD_ENVIRONMENT_URL || 'http://localhost:8000' }}
+          CI: true
+        run: |
+          echo "🧪 Executando testes Selenium pós-deploy em produção..."
+          echo "📍 URL de teste: $TEST_BASE_URL"
+          
+          if [ -z "$TEST_BASE_URL" ] || [ "$TEST_BASE_URL" = "http://localhost:8000" ]; then
+            echo "⚠️ ATENÇÃO: PROD_ENVIRONMENT_URL não configurado. Usando localhost (não é produção real)"
+          fi
+          
+          # Executa apenas os testes de pós-deploy em produção
+          mvn test -Dtest=PostDeployProductionTest
+          
+          echo "✅ Testes Selenium pós-deploy concluídos!"
       
       - name: Notificação de Deploy
         if: success()

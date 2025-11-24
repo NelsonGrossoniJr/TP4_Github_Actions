@@ -1,6 +1,7 @@
 package org.example.controller;
 
 import io.github.bonigarcia.wdm.WebDriverManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -30,10 +31,16 @@ public class BaseTest {
         }
 
         driver = new ChromeDriver(chromeOptions);
-        driver.get("http://localhost:8000/items");
+        
+        // Permite configurar a URL via variável de ambiente (útil para testes pós-deploy em produção)
+        String baseUrl = System.getenv("TEST_BASE_URL");
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            baseUrl = "http://localhost:8000";
+        }
+        driver.get(baseUrl + "/items");
     }
 
-    @BeforeEach
+    @AfterEach
     public void tearDown(){
         if(driver != null ){
             driver.quit();
