@@ -247,94 +247,74 @@ jobs:
           google-chrome --version || echo "Chrome não encontrado, mas WebDriverManager vai gerenciar"
           export DISPLAY=:99
       
-      - name: Iniciar aplicação para testes (se necessário)
-        id: start-app
-        env:
-          PROD_URL: ${{ secrets.PROD_ENVIRONMENT_URL }}
+      - name: Verificar dependências e compilar
         run: |
-          if [ -z "$PROD_URL" ] || [ "$PROD_URL" = "" ]; then
-            echo "⚠️ PROD_ENVIRONMENT_URL não configurado - iniciando aplicação localmente"
-            echo "🚀 Iniciando aplicação em localhost:8000 para testes..."
-            
-            # Compila o projeto primeiro (se ainda não foi compilado)
-            if [ ! -f target/*.jar ] && [ ! -d target/classes ]; then
-              echo "📦 Compilando projeto..."
-              mvn clean compile package -DskipTests
+          echo "📦 Verificando dependências e compilando projeto..."
+          mvn dependency:resolve
+          mvn clean compile package -DskipTests
+          echo "✅ Compilação concluída!"
+      
+      - name: Iniciar aplicação em localhost
+        run: |
+          echo "🚀 Iniciando aplicação em localhost:8000..."
+          
+          # Inicia a aplicação em background
+          nohup mvn exec:java -Dexec.mainClass="org.example.App" > app-prod-test.log 2>&1 &
+          APP_PID=$!
+          echo $APP_PID > app-prod-test.pid
+          echo "📝 PID da aplicação: $APP_PID"
+          sleep 5  # Dá um tempo inicial para o processo iniciar
+          
+          # Aguarda aplicação estar pronta
+          echo "⏳ Aguardando aplicação iniciar..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/items > /dev/null 2>&1; then
+              echo "✅ Aplicação está rodando em localhost:8000!"
+              exit 0
             fi
-            
-            # Inicia a aplicação usando Maven exec (mais confiável)
-            echo "🚀 Iniciando aplicação..."
-            nohup mvn exec:java -Dexec.mainClass="org.example.App" -Dexec.classpathScope=compile > app-prod-test.log 2>&1 &
-            APP_PID=$!
-            echo $APP_PID > app-prod-test.pid
-            echo "📝 PID da aplicação: $APP_PID"
-            sleep 3  # Dá um tempo inicial para o processo iniciar
-            
-            # Aguarda aplicação iniciar
-            echo "⏳ Aguardando aplicação iniciar (máximo 60 segundos)..."
-            for i in {1..30}; do
-              if curl -f http://localhost:8000/items > /dev/null 2>&1; then
-                echo "✅ Aplicação está pronta em localhost:8000!"
-                echo "app_started=true" >> $GITHUB_OUTPUT
-                exit 0
-              fi
-              echo "   Tentativa $i/30 - aguardando..."
-              sleep 2
-            done
-            
-            echo "❌ Aplicação não iniciou a tempo!"
+            echo "   Tentativa $i/30 - aguardando aplicação..."
+            sleep 2
+          done
+          
+          echo "❌ ERRO: Aplicação não iniciou a tempo!"
+          if [ -f app-prod-test.log ]; then
+            echo "=== Logs da aplicação ==="
+            cat app-prod-test.log
+          fi
+          exit 1
+      
+      - name: Verificar se aplicação está respondendo
+        run: |
+          echo "🔍 Verificando se aplicação está respondendo..."
+          if curl -f http://localhost:8000/items > /dev/null 2>&1; then
+            echo "✅ Aplicação está respondendo corretamente!"
+          else
+            echo "❌ ERRO: Aplicação não está respondendo!"
             if [ -f app-prod-test.log ]; then
               echo "=== Logs da aplicação ==="
               cat app-prod-test.log
             fi
-            echo "app_started=false" >> $GITHUB_OUTPUT
             exit 1
-          else
-            echo "✅ URL de produção configurada: $PROD_URL"
-            echo "   Aplicação deve estar rodando no servidor"
-            echo "app_started=skip" >> $GITHUB_OUTPUT
           fi
       
       - name: Testes Selenium pós-deploy em produção
         env:
-          TEST_BASE_URL: ${{ secrets.PROD_ENVIRONMENT_URL || 'http://localhost:8000' }}
+          TEST_BASE_URL: http://localhost:8000
           CI: true
-        if: steps.start-app.outputs.app_started != 'false'
         run: |
-          echo "🧪 Executando testes Selenium pós-deploy em produção..."
-          echo "📍 URL de teste: $TEST_BASE_URL"
+          echo "🧪 Executando testes Selenium pós-deploy..."
+          echo "📍 URL: http://localhost:8000"
           echo ""
           
-          if [ "$TEST_BASE_URL" = "http://localhost:8000" ]; then
-            echo "📝 Modo demonstração: testando aplicação local"
-            echo "   (Em produção real, configure PROD_ENVIRONMENT_URL no GitHub Secrets)"
-            echo ""
-            
-            # Verifica se aplicação está respondendo
-            if ! curl -f http://localhost:8000/items > /dev/null 2>&1; then
-              echo "❌ ERRO: Aplicação não está respondendo em localhost:8000"
-              echo "   Verificando logs..."
-              if [ -f app-prod-test.log ]; then
-                cat app-prod-test.log
-              fi
-              exit 1
-            fi
-          else
-            echo "🌐 Modo produção: testando servidor real"
-            echo "   Aguardando 30 segundos para garantir que deploy finalizou..."
-            sleep 30
-          fi
-          
           # Executa os testes
-          echo "▶️ Executando testes..."
           mvn test -Dtest=PostDeployProductionTest
           
           echo "✅ Testes Selenium pós-deploy concluídos!"
       
-      - name: Parar aplicação local (se iniciada)
-        if: always() && steps.start-app.outputs.app_started == 'true'
+      - name: Parar aplicação
+        if: always()
         run: |
-          echo "🛑 Parando aplicação local..."
+          echo "🛑 Parando aplicação..."
           if [ -f app-prod-test.pid ]; then
             PID=$(cat app-prod-test.pid)
             kill $PID 2>/dev/null || true
@@ -348,6 +328,6 @@ jobs:
         if: success()
         run: |
           echo "✅ Deploy para produção realizado com sucesso!"
-          echo "🔗 URL: ${{ secrets.PROD_ENVIRONMENT_URL || 'Não configurada' }}"
-          echo "📊 Monitoramento: Verifique os logs e métricas da aplicação"
+          echo "🔗 Aplicação testada em: http://localhost:8000"
+          echo "📊 Testes Selenium pós-deploy executados e validados!"
 
