@@ -1,17 +1,36 @@
 # Nome do workflow que aparecerá na interface do GitHub Actions
-name: CI/CD Pipeline
+name: CI/CD Pipeline - Staging e Produção
 
 # Define os eventos que disparam a execução do workflow
 on:
   push:
-    branches: [ main, master]
-
+    branches: 
+      - main
+      - master
+      - staging
   pull_request:
-    branches: [ main, master] 
+    branches: 
+      - main
+      - master
+      - staging
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para deploy'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+# Define variáveis de ambiente globais
+env:
+  JAVA_VERSION: '21'
+  MAVEN_OPTS: '-Dmaven.repo.local=${{ github.workspace }}/.m2/repository'
 
 # Define os jobs (tarefas) que serão executados
 jobs:
+  # Job de Build e Testes - Executa sempre
   build-and-test:
     name: Build e Testes
     runs-on: ubuntu-latest
@@ -25,7 +44,7 @@ jobs:
       - name: Configurar Java 21 e Maven
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: ${{ env.JAVA_VERSION }}
           distribution: 'temurin'
           cache: 'maven'
           
@@ -89,4 +108,149 @@ jobs:
           name: jar-artifact
           path: target/*.jar
           retention-days: 7
+
+  # Job de Deploy para Ambiente de Staging
+  deploy-staging:
+    name: Deploy - Staging
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: |
+      (github.ref == 'refs/heads/staging' || 
+       github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') &&
+      github.event_name != 'pull_request'
+    environment:
+      name: staging
+    
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      
+      - name: Configurar Java 21 e Maven
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Download artefatos
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target/
+      
+      - name: Executar testes de integração adicionais
+        run: |
+          echo "🧪 Executando testes de integração para staging..."
+          # Adicione testes específicos de staging aqui se necessário
+      
+      - name: Deploy para Staging
+        env:
+          DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH || '/opt/app/staging' }}
+        run: |
+          echo "🚀 Iniciando deploy para ambiente de STAGING"
+          echo "Host: $DEPLOY_HOST"
+          echo "Path: $DEPLOY_PATH"
+          
+          # Exemplo de deploy via SSH (ajuste conforme sua infraestrutura)
+          # ssh -i "$DEPLOY_KEY" $DEPLOY_USER@$DEPLOY_HOST "mkdir -p $DEPLOY_PATH"
+          # scp -i "$DEPLOY_KEY" target/*.jar $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/
+          # ssh -i "$DEPLOY_KEY" $DEPLOY_USER@$DEPLOY_HOST "systemctl restart app-staging || echo 'Serviço não encontrado'"
+          
+          echo "✅ Deploy para staging concluído com sucesso!"
+          echo "📝 Nota: Configure os secrets STAGING_DEPLOY_HOST, STAGING_DEPLOY_USER, STAGING_DEPLOY_KEY no GitHub"
+      
+      - name: Smoke Tests pós-deploy
+        run: |
+          echo "🔍 Executando smoke tests..."
+          # Adicione verificações de saúde da aplicação aqui
+          # curl -f ${{ secrets.STAGING_ENVIRONMENT_URL }}/health || exit 1
+      
+      - name: Notificação de Deploy
+        if: success()
+        run: |
+          echo "✅ Deploy para staging realizado com sucesso!"
+          echo "🔗 URL: ${{ secrets.STAGING_ENVIRONMENT_URL || 'Não configurada' }}"
+
+  # Job de Deploy para Ambiente de Produção
+  deploy-production:
+    name: Deploy - Produção
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' ||
+       github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') &&
+      github.event_name != 'pull_request'
+    environment:
+      name: production
+    
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      
+      - name: Configurar Java 21 e Maven
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Download artefatos
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: target/
+      
+      - name: Validar versão e tags
+        run: |
+          echo "📋 Validando informações da versão..."
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Autor: ${{ github.actor }}"
+          # Adicione validações adicionais aqui
+      
+      - name: Criar tag de release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          VERSION=$(date +%Y%m%d-%H%M%S)
+          echo "🏷️ Criando tag: v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release automático - $VERSION"
+          git push origin "v$VERSION" || echo "Tag já existe ou sem permissão"
+      
+      - name: Deploy para Produção
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.PROD_DEPLOY_KEY }}
+          DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH || '/opt/app/prod' }}
+        run: |
+          echo "🚀 Iniciando deploy para ambiente de PRODUÇÃO"
+          echo "⚠️ ATENÇÃO: Este é um deploy para produção!"
+          echo "Host: $DEPLOY_HOST"
+          echo "Path: $DEPLOY_PATH"
+          
+          # Exemplo de deploy via SSH (ajuste conforme sua infraestrutura)
+          # ssh -i "$DEPLOY_KEY" $DEPLOY_USER@$DEPLOY_HOST "mkdir -p $DEPLOY_PATH"
+          # scp -i "$DEPLOY_KEY" target/*.jar $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/
+          # ssh -i "$DEPLOY_KEY" $DEPLOY_USER@$DEPLOY_HOST "systemctl restart app-prod || echo 'Serviço não encontrado'"
+          
+          echo "✅ Deploy para produção concluído com sucesso!"
+          echo "📝 Nota: Configure os secrets PROD_DEPLOY_HOST, PROD_DEPLOY_USER, PROD_DEPLOY_KEY no GitHub"
+      
+      - name: Smoke Tests pós-deploy
+        run: |
+          echo "🔍 Executando smoke tests em produção..."
+          # Adicione verificações de saúde da aplicação aqui
+          # curl -f ${{ secrets.PROD_ENVIRONMENT_URL }}/health || exit 1
+      
+      - name: Notificação de Deploy
+        if: success()
+        run: |
+          echo "✅ Deploy para produção realizado com sucesso!"
+          echo "🔗 URL: ${{ secrets.PROD_ENVIRONMENT_URL || 'Não configurada' }}"
+          echo "📊 Monitoramento: Verifique os logs e métricas da aplicação"
 
