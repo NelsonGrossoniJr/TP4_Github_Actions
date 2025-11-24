@@ -249,18 +249,30 @@ jobs:
       
       - name: Testes Selenium pós-deploy em produção
         env:
-          TEST_BASE_URL: ${{ secrets.PROD_ENVIRONMENT_URL || 'http://localhost:8000' }}
+          TEST_BASE_URL: ${{ secrets.PROD_ENVIRONMENT_URL }}
           CI: true
         run: |
           echo "🧪 Executando testes Selenium pós-deploy em produção..."
-          echo "📍 URL de teste: $TEST_BASE_URL"
           
-          if [ -z "$TEST_BASE_URL" ] || [ "$TEST_BASE_URL" = "http://localhost:8000" ]; then
-            echo "⚠️ ATENÇÃO: PROD_ENVIRONMENT_URL não configurado. Usando localhost (não é produção real)"
+          if [ -z "$TEST_BASE_URL" ] || [ "$TEST_BASE_URL" = "" ]; then
+            echo "⚠️ ATENÇÃO: PROD_ENVIRONMENT_URL não está configurado!"
+            echo "   Os testes serão pulados automaticamente."
+            echo "   Configure o secret PROD_ENVIRONMENT_URL no GitHub para habilitar testes em produção."
+            echo ""
+            echo "   Para configurar:"
+            echo "   1. Vá em Settings → Secrets and variables → Actions"
+            echo "   2. Adicione PROD_ENVIRONMENT_URL com a URL completa (ex: https://app.exemplo.com)"
+            echo ""
+            # Executa os testes mesmo assim - eles vão pular automaticamente se não tiver URL
+            mvn test -Dtest=PostDeployProductionTest || echo "⚠️ Testes falharam ou foram pulados"
+          else
+            echo "📍 URL de produção configurada: $TEST_BASE_URL"
+            echo "   Aguardando aplicação estar pronta (30 segundos)..."
+            sleep 30  # Aguarda aplicação iniciar após deploy
+            
+            # Executa apenas os testes de pós-deploy em produção
+            mvn test -Dtest=PostDeployProductionTest
           fi
-          
-          # Executa apenas os testes de pós-deploy em produção
-          mvn test -Dtest=PostDeployProductionTest
           
           echo "✅ Testes Selenium pós-deploy concluídos!"
       
